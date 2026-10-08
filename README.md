@@ -1,6 +1,6 @@
 # csv
 
-CSV reading and writing, for [Meadow](https://github.com/mcdearman/meadow).
+CSV reading and writing, for [Meadow](https://github.com/meadow-lang/meadow).
 It reads quoted fields, escapes, comments, headers, any delimiter and record
 terminator, and text that is not UTF-8. It writes fields with the quoting each
 one needs.
@@ -13,7 +13,7 @@ messages. Serde support is not ported: records are lists of fields.
 ## Install
 
 ```sh
-meadow add mcdearman/Csv
+meadow add meadow-lang/Csv
 ```
 
 ## Use

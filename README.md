@@ -10,6 +10,14 @@ This package is a port of Rust's [`csv`](https://github.com/BurntSushi/rust-csv)
 and writes exactly as the crates do, including record positions and error
 messages. Serde support is not ported: records are lists of fields.
 
+## AI disclosure
+
+Csv is written with AI coding agents: Anthropic's Claude, through Claude Code.
+Most of the code, the tests, the documentation and the commit messages in this
+repository were written by an agent, under the direction of the project's
+author, who decides the design and what goes in. Read it, and rely on it, with
+that in mind.
+
 ## Install
 
 ```sh

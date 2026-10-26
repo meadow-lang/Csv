@@ -21,8 +21,8 @@ mod Tests
 @pub use Csv.Core.Terminator.*
 @pub use Csv.Core.QuoteStyle.*
 @pub use Csv.Record (
-  Position, ByteRecord, StringRecord, byteRecord, stringRecord, field, byteField, CsvError, errorMessage,
-  errorPosition,
+  Position, ByteRecord, StringRecord, byteRecord, stringRecord, field, byteField, CsvError,
+  errorMessage, errorPosition,
 )
 @pub use Csv.Record.CsvError.*
 @pub use Csv.Reader

@@ -60,20 +60,20 @@ use Csv.Record
       doubleQuote = b.doubleQuote,
       comment = b.comment
     }
-  in
-  Writer {
-    core = coreWriter cfg,
-    capacity = b.capacity,
-    buffered = 0,
-    out = V.empty,
-    flexible = b.flexible,
-    firstFieldCount = None,
-    fieldsWritten = 0
-  }
+  in Writer {
+       core = coreWriter cfg,
+       capacity = b.capacity,
+       buffered = 0,
+       out = V.empty,
+       flexible = b.flexible,
+       firstFieldCount = None,
+       fieldsWritten = 0
+     }
 
 fun room (w : Writer) = w.capacity - w.buffered
 
-fun emit bytes (w : Writer) = { w | out = V.append w.out bytes, buffered = w.buffered + V.len bytes }
+fun emit bytes (w : Writer) =
+  { w | out = V.append w.out bytes, buffered = w.buffered + V.len bytes }
 
 -- Empties the buffer: the crate's `flush`. The bytes are kept in `out`
 -- already, so only the room changes.
@@ -103,13 +103,14 @@ fun fieldImpl (bytes : #[UInt8]) (w : Writer) =
   { w2 | fieldsWritten = w2.fieldsWritten + 1 }
 
 fun checkFieldCount (w : Writer) =
-  if w.flexible
-  then Ok w
+  if w.flexible then Ok w
   else
     match w.firstFieldCount with
     | None -> Ok { w | firstFieldCount = Just w.fieldsWritten }
     | Just expected ->
-        if expected != w.fieldsWritten then Err (CsvError.UnequalLengths None expected w.fieldsWritten) else Ok w
+        if expected != w.fieldsWritten then
+          Err (CsvError.UnequalLengths None expected w.fieldsWritten)
+        else Ok w
 
 fun terminatorImpl (w : Writer) =
   match checkFieldCount w with
@@ -121,8 +122,7 @@ fun terminatorImpl (w : Writer) =
             match writeTerminator x.core (room x) with
             | (done, bytes, core) -> (done, emit bytes { x | core = core }))
           w1
-      in
-      (Ok (), { w2 | fieldsWritten = 0 })
+      in (Ok (), { w2 | fieldsWritten = 0 })
 
 -- Writes one field of a record: the crate's `write_field`.
 @pub fun writeByteField (bytes : #[UInt8]) (w : Writer) = fieldImpl bytes w
@@ -132,7 +132,8 @@ fun terminatorImpl (w : Writer) =
 -- Writes a record of bytes and ends it, a field at a time: the crate's
 -- `write_record`. On an error, the fields are written but the record is not
 -- ended.
-@pub fun writeRecordBytes fields (w : Writer) = terminatorImpl (V.foldl (\x f -> fieldImpl f x) w fields)
+@pub fun writeRecordBytes fields (w : Writer) =
+  terminatorImpl (V.foldl (\x f -> fieldImpl f x) w fields)
 
 -- Writes a record of text and ends it.
 @pub fun writeRecord fields (w : Writer) = writeRecordBytes (V.map stringToBytes fields) w
@@ -143,8 +144,7 @@ fun terminatorImpl (w : Writer) =
   let total = V.foldl (\n (f : #[UInt8]) -> n + arrayLen f) 0 fields in
   let count = V.len fields in
   let upperBound = 2 * total + max 0 (count - 1) + 2 * count + 2 in
-  if total == 0 or room w < upperBound
-  then writeRecordBytes fields w
+  if total == 0 or room w < upperBound then writeRecordBytes fields w
   else
     let core = w.core in
     let cfg = core.cfg in
@@ -153,8 +153,7 @@ fun terminatorImpl (w : Writer) =
       V.map
         (\(i, (f : #[UInt8])) ->
           let sep = if i > 0 then [toUInt8 cfg.delimiter] else V.empty in
-          if shouldQuote core f
-          then
+          if shouldQuote core f then
             match quoteInto f 0 (2 * arrayLen f) cfg.quote cfg.escape cfg.doubleQuote with
             | (_, _, quoted) -> V.concat [sep, [quoteByte], quoted, [quoteByte]]
           else V.append sep (V.fromArray f))
@@ -168,8 +167,7 @@ fun terminatorImpl (w : Writer) =
           match cfg.term with
           | Terminator.CRLF -> [toUInt8 13, toUInt8 10]
           | Terminator.Any b -> [toUInt8 b]
-        in
-        (Ok (), { (emit term w2) | fieldsWritten = 0 })
+        in (Ok (), { (emit term w2) | fieldsWritten = 0 })
 
 -- Everything written, as bytes: the crate's `into_inner` after a flush.
 @pub fun toBytes (w : Writer) = V.toArray w.out
@@ -189,7 +187,4 @@ fun terminatorImpl (w : Writer) =
       | Err e -> Err e)
     (Ok (writer b))
     rows
-    |> (\result ->
-      match result with
-      | Ok w -> Ok (toText w)
-      | Err e -> Err e)
+    |> (\result -> match result with | Ok w -> Ok (toText w) | Err e -> Err e)

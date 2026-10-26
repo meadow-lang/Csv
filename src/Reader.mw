@@ -86,7 +86,10 @@ fun byteOf c = C.code c % 256
 -- the line numbers the crate counts where a line feed is not special.
 @pub fun withBufferCapacity n b = { b | capacity = n }
 
-record Headers = { bytes : Filled, text : Result (Int, Int) Filled }
+record Headers = {
+  bytes : Filled,
+  text : Result (Int, Int) Filled
+}
 
 -- A reader, and where it is in its input.
 @pub record Reader = {
@@ -119,24 +122,23 @@ record Headers = { bytes : Filled, text : Result (Int, Int) Filled }
       comment = b.comment,
       quoting = b.quoting
     }
-  in
-  Reader {
-    core = coreReader cfg,
-    input = bytes,
-    consumed = 0,
-    filled = 0,
-    capacity = b.capacity,
-    headers = None,
-    hasHeaders = b.hasHeaders,
-    flexible = b.flexible,
-    trim = b.trim,
-    firstFieldCount = None,
-    pos = startPosition,
-    first = False,
-    eof = False,
-    textBuffer = emptyFilled,
-    byteBuffer = emptyFilled
-  }
+  in Reader {
+       core = coreReader cfg,
+       input = bytes,
+       consumed = 0,
+       filled = 0,
+       capacity = b.capacity,
+       headers = None,
+       hasHeaders = b.hasHeaders,
+       flexible = b.flexible,
+       trim = b.trim,
+       firstFieldCount = None,
+       pos = startPosition,
+       first = False,
+       eof = False,
+       textBuffer = emptyFilled,
+       byteBuffer = emptyFilled
+     }
 
 -- A reader of `text`.
 @pub fun fromString text b = fromBytes (stringToBytes text) b
@@ -151,16 +153,17 @@ record Headers = { bytes : Filled, text : Result (Int, Int) Filled }
 
 -- The next buffer's worth of input, once the last is used up.
 fun fillBuffer (r : Reader) =
-  if r.consumed >= r.filled
-  then { r | filled = r.consumed + min r.capacity (arrayLen r.input - r.consumed) }
+  if r.consumed >= r.filled then
+    { r | filled = r.consumed + min r.capacity (arrayLen r.input - r.consumed) }
   else r
 
 -- The fields of `bytes`, split at `ends`.
 fun splitFields (bytes : [UInt8]) ends =
   let arr = V.toArray bytes in
-  match
-    V.foldl (\(acc, start) stop -> (V.pushBack acc (arraySlice arr start stop), stop)) (V.empty, 0) ends
-  with
+  match V.foldl
+    (\(acc, start) stop -> (V.pushBack acc (arraySlice arr start stop), stop))
+    (V.empty, 0)
+    ends with
   | (fields, _) -> fields
 
 -- Counts the record, and checks its length against the first's.
@@ -168,24 +171,29 @@ fun addRecord (f : Filled) (r : Reader) =
   let p = r.pos in
   let counted = { r | pos = { p | index = p.index + 1 } } in
   let len = V.len f.fields in
-  if r.flexible
-  then (Ok True, counted)
+  if r.flexible then (Ok True, counted)
   else
     match r.firstFieldCount with
     | None -> (Ok True, { counted | firstFieldCount = Just len })
     | Just expected ->
-        if len != expected then (Err (CsvError.UnequalLengths f.position expected len), counted) else (Ok True, counted)
+        if len != expected then (Err (CsvError.UnequalLengths f.position expected len), counted)
+        else (Ok True, counted)
 
 -- One record into a buffer with the room of `buf`: the crate's
 -- `read_byte_record_impl`.
 fun readImpl (r : Reader) (buf : Filled) =
   let start = { buf | fields = V.empty, position = Just r.pos } in
-  if r.eof
-  then (Ok False, start, r)
+  if r.eof then (Ok False, start, r)
   else
     let rec loop (rd : Reader) (f : Filled) out ends =
       let r1 = fillBuffer rd in
-      match parseRecord r1.core r1.input r1.consumed r1.filled (f.fieldsCap - V.len out) (f.endsCap - V.len ends) with
+      match parseRecord
+        r1.core
+        r1.input
+        r1.consumed
+        r1.filled
+        (f.fieldsCap - V.len out)
+        (f.endsCap - V.len ends) with
       | (step, nin, bytes, newEnds, core) ->
           let p = r1.pos in
           let moved = { p | byte = p.byte + nin, line = core.line } in
@@ -195,31 +203,28 @@ fun readImpl (r : Reader) (buf : Filled) =
           match step with
           | Step.InputEmpty -> loop r2 f out1 ends1
           | Step.OutputFull ->
-              loop r2 { f | fieldsCap = if 2 * f.fieldsCap > 4 then 2 * f.fieldsCap else 4 } out1 ends1
-          | Step.OutputEndsFull -> loop r2 { f | endsCap = if 2 * f.endsCap > 4 then 2 * f.endsCap else 4 } out1 ends1
+              loop
+                r2
+                { f | fieldsCap = if 2 * f.fieldsCap > 4 then 2 * f.fieldsCap else 4 }
+                out1
+                ends1
+          | Step.OutputEndsFull ->
+              loop r2 { f | endsCap = if 2 * f.endsCap > 4 then 2 * f.endsCap else 4 } out1 ends1
           | Step.GotRecord ->
               let done = { f | fields = splitFields out1 ends1 } in
               (match addRecord done r2 with
                | (result, r3) -> (result, done, r3))
           | Step.AtEnd -> (Ok False, f, { r2 | eof = True })
-    in
-    loop r start V.empty V.empty
+    in loop r start V.empty V.empty
 
 -- Sets the headers from bytes (`Err`) or text (`Ok`): the crate's
 -- `set_headers_impl`.
 fun setHeadersFrom (given : Result Filled Filled) (r : Reader) =
-  let (bytes : Filled) =
-    match given with
-    | Ok f -> f
-    | Err f -> f
-  in
+  let (bytes : Filled) = match given with | Ok f -> f | Err f -> f in
   let text =
     match given with
     | Ok f -> Ok f
-    | Err f ->
-        match validate f with
-        | Just bad -> Err bad
-        | None -> Ok f
+    | Err f -> match validate f with | Just bad -> Err bad | None -> Ok f
   in
   let trimmed = trimsHeaders r.trim in
   let text1 =
@@ -249,8 +254,7 @@ fun readBytes (r : Reader) (buf : Filled) =
           | Just _ -> (Ok ok, trimmedFields r2 f, r2)
           | None ->
               let r3 = setHeadersFrom (Err f) r2 in
-              if r3.hasHeaders
-              then
+              if r3.hasHeaders then
                 match readImpl r3 f with
                 | (result, f2, r4) -> (result, trimmedFields r4 f2, r4)
               else (Ok ok, trimmedFields r3 f, r3)
@@ -272,8 +276,7 @@ fun readText (r : Reader) (buf : Filled) =
         | (Err e, _) -> Err e
         | (Ok _, Just (fieldIndex, upTo)) -> Err (CsvError.Utf8 (Just before) fieldIndex upTo)
         | (Ok ok, None) -> Ok ok
-      in
-      (checked, if trimsFields r1.trim then trimText f1 else f1, r1)
+      in (checked, if trimsFields r1.trim then trimText f1 else f1, r1)
 
 fun asRecord result (f : Filled) convert =
   match result with
@@ -323,7 +326,8 @@ fun ensureHeaders (r : Reader) =
       | None -> (Ok (byteRecord V.empty), r1)
 
 -- Headers of your own, in place of any read.
-@pub fun setHeaders fields (r : Reader) = setHeadersFrom (Ok (filledOf (V.map stringToBytes fields))) r
+@pub fun setHeaders fields (r : Reader) =
+  setHeadersFrom (Ok (filledOf (V.map stringToBytes fields))) r
 
 @pub fun setByteHeaders fields (r : Reader) = setHeadersFrom (Err (filledOf fields)) r
 
@@ -335,8 +339,7 @@ fun collect (r : Reader) step =
     | (Ok None, _, r1) -> (acc, r1)
     | (Ok (Just x), f, r1) -> go r1 f (V.pushBack acc (Ok x))
     | (Err e, f, r1) -> go r1 f (V.pushBack acc (Err e))
-  in
-  go r emptyFilled V.empty
+  in go r emptyFilled V.empty
 
 -- The rest of the records: the crate's `records`.
 @pub fun records (r : Reader) =

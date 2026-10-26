@@ -30,8 +30,9 @@ use Csv.Writer
 
 @cfg(test)
 fun num s i n =
-  let rec go k acc = if k >= n then acc else go (k + 1) (acc * 64 + (toInt (stringByteAt s (i + k)) - 48)) in
-  (go 0 0, i + n)
+  let rec go k acc =
+    if k >= n then acc else go (k + 1) (acc * 64 + (toInt (stringByteAt s (i + k)) - 48))
+  in (go 0 0, i + n)
 
 @cfg(test)
 fun str s i =
@@ -44,7 +45,10 @@ fun flag s i = mapFst (\n -> n == 1) (num s i 1)
 @cfg(test)
 fun bytesAt s i =
   let n = num s i 3 in
-  (V.toArray (V.map (\k -> toUInt8 (fst (num s (snd n + 2 * k) 2))) (V.range 0 (fst n))), snd n + 2 * fst n)
+  (
+    V.toArray (V.map (\k -> toUInt8 (fst (num s (snd n + 2 * k) 2))) (V.range 0 (fst n))),
+    snd n + 2 * fst n
+  )
 
 @cfg(test)
 fun maybeByte s i =
@@ -56,19 +60,12 @@ fun maybeByte s i =
 @cfg(test)
 fun times n i acc f =
   let rec go k at a =
-    if k >= n
-    then (a, at)
-    else
-      match f at a with
-      | (a2, next) -> go (k + 1) next a2
-  in
-  go 0 i acc
+    if k >= n then (a, at) else match f at a with | (a2, next) -> go (k + 1) next a2
+  in go 0 i acc
 
 @cfg(test)
 fun listOf n i read =
-  times n i V.empty (\at acc ->
-    let x = read at in
-    (V.pushBack acc (fst x), snd x))
+  times n i V.empty (\at acc -> let x = read at in (V.pushBack acc (fst x), snd x))
 
 @cfg(test)
 fun charOf b = C.fromCode b
@@ -76,7 +73,12 @@ fun charOf b = C.fromCode b
 -- What an operation gave, in a form both sides can be compared in.
 @cfg(test)
 @derive(PartialEq)
-data Seen = Nothing | Got [#[UInt8]] (Maybe Position) | Failed String | Many [Seen] | Ended Position Bool
+data Seen
+  = Nothing
+  | Got [#[UInt8]] (Maybe Position)
+  | Failed String
+  | Many [Seen]
+  | Ended Position Bool
 
 @cfg(test)
 fun readPosition s i =
@@ -119,7 +121,9 @@ def trims = [Trim.NoTrim, Trim.Headers, Trim.Fields, Trim.All]
 fun readReaderConfig s i =
   let delimiter = num s i 2 in
   let crlf = flag s (snd delimiter) in
-  let term = if fst crlf then (Terminator.CRLF, snd crlf) else mapFst Terminator.Any (num s (snd crlf) 2) in
+  let term =
+    if fst crlf then (Terminator.CRLF, snd crlf) else mapFst Terminator.Any (num s (snd crlf) 2)
+  in
   let quote = num s (snd term) 2 in
   let escape = maybeByte s (snd quote) in
   let doubled = flag s (snd escape) in
@@ -143,8 +147,7 @@ fun readReaderConfig s i =
       |> withHasHeaders (fst headers)
       |> withTrim (V.getOr Trim.NoTrim trims (fst trim))
       |> withBufferCapacity (fst capacity)
-  in
-  (if fst ascii then withAscii b else b, snd ascii)
+  in (if fst ascii then withAscii b else b, snd ascii)
 
 -- One operation on the reader: what the crate saw, what the port sees, and
 -- the reader after it.
@@ -199,28 +202,33 @@ fun runReading i =
   let input = bytesAt s (snd b) in
   let ops = num s (snd input) 1 in
   let done =
-    times (fst ops) (snd ops) (V.empty, V.empty, fromBytes (fst input) (fst b)) (\at (wants, gots, r) ->
+    times (fst ops) (snd ops) (V.empty, V.empty, fromBytes (fst input) (fst b)) (\at (
+      wants,
+      gots,
+      r
+    ) ->
       match readOp s at r with
       | ((want, got), next, r1) -> ((V.pushBack wants want, V.pushBack gots got, r1), next))
-  in
-  match fst done with
-  | (wants, gots, r) ->
-      let pos = readPosition s (snd done) in
-      let ended = flag s (snd pos) in
-      let wantEnd =
-        match fst pos with
-        | Just p -> Seen.Ended p (fst ended)
-        | None -> Seen.Nothing
-      in
-      ((V.pushBack wants wantEnd, V.pushBack gots (Seen.Ended (position r) (isDone r))), snd ended)
+  in match fst done with
+     | (wants, gots, r) ->
+         let pos = readPosition s (snd done) in
+         let ended = flag s (snd pos) in
+         let wantEnd =
+           match fst pos with
+           | Just p -> Seen.Ended p (fst ended)
+           | None -> Seen.Nothing
+         in (
+              (V.pushBack wants wantEnd, V.pushBack gots (Seen.Ended (position r) (isDone r))),
+              snd ended
+            )
 
 @cfg(test)
 fun checkAll s run i n bad =
-  if i >= stringByteLength s
-  then (n, bad)
+  if i >= stringByteLength s then (n, bad)
   else
     match run i with
-    | ((want, got), next) -> checkAll s run next (n + 1) (if want == got then bad else V.pushBack bad (n, want, got))
+    | ((want, got), next) ->
+        checkAll s run next (n + 1) (if want == got then bad else V.pushBack bad (n, want, got))
 
 -- The number of readings, and the first few the port does differently.
 @cfg(test)
@@ -229,7 +237,8 @@ fun checkAll s run i n bad =
   | (n, bad) -> assertEq (n, V.take bad 1) (1500, []) "readings the port and csv do differently"
 
 @cfg(test)
-def terminators = [Terminator.CRLF, Terminator.Any 10, Terminator.Any 13, Terminator.Any 59, Terminator.Any 124]
+def terminators =
+  [Terminator.CRLF, Terminator.Any 10, Terminator.Any 13, Terminator.Any 59, Terminator.Any 124]
 
 @cfg(test)
 def styles = [QuoteStyle.Always, QuoteStyle.Necessary, QuoteStyle.NonNumeric, QuoteStyle.Never]
@@ -271,25 +280,29 @@ fun runWriting i =
         | k ->
             let n = num s (snd op) 1 in
             let fields = listOf (fst n) (snd n) (\p -> bytesAt s p) in
-            if k == 1
-            then (writeRecordBytes (fst fields) w, snd fields)
+            if k == 1 then (writeRecordBytes (fst fields) w, snd fields)
             else (writeByteRecord (fst fields) w, snd fields)
-      in
-      match applied with
-      | ((result, w1), next) ->
-          let ok = flag s next in
-          let want = if fst ok then (Seen.Nothing, snd ok) else mapFst Seen.Failed (str s (snd ok)) in
-          let got =
-            match result with
-            | Ok () -> Seen.Nothing
-            | Err e -> Seen.Failed (errorMessage e)
-          in
-          ((V.pushBack wants (fst want), V.pushBack gots got, w1), snd want))
-  in
-  match fst done with
-  | (wants, gots, w) ->
-      let written = bytesAt s (snd done) in
-      ((V.pushBack wants (Seen.Got [fst written] None), V.pushBack gots (Seen.Got [toBytes w] None)), snd written)
+      in match applied with
+         | ((result, w1), next) ->
+             let ok = flag s next in
+             let want =
+               if fst ok then (Seen.Nothing, snd ok) else mapFst Seen.Failed (str s (snd ok))
+             in
+             let got =
+               match result with
+               | Ok () -> Seen.Nothing
+               | Err e -> Seen.Failed (errorMessage e)
+             in ((V.pushBack wants (fst want), V.pushBack gots got, w1), snd want))
+  in match fst done with
+     | (wants, gots, w) ->
+         let written = bytesAt s (snd done) in
+         (
+           (
+             V.pushBack wants (Seen.Got [fst written] None),
+             V.pushBack gots (Seen.Got [toBytes w] None)
+           ),
+           snd written
+         )
 
 @cfg(test)
 @test fun writingsMatchTheCrate () =
@@ -305,7 +318,8 @@ fun runNumber i =
 @cfg(test)
 @test fun numbersMatchTheCrate () =
   match checkAll numbers runNumber 0 0 V.empty with
-  | (n, bad) -> assertEq (n, V.take bad 3) (536, []) "strings the port and csv-core take differently"
+  | (n, bad) ->
+      assertEq (n, V.take bad 3) (536, []) "strings the port and csv-core take differently"
 
 -- --- examples -----------------------------------------------------------------------------
 
@@ -313,11 +327,12 @@ fun runNumber i =
 @test fun examples () =
   let a =
     assertEq
-      (Result.map (V.map (\(r : StringRecord) -> r.fields)) (readAll "name,age\nAda,36\n" readerBuilder))
+      (Result.map
+         (V.map (\(r : StringRecord) -> r.fields))
+         (readAll "name,age\nAda,36\n" readerBuilder))
       (Ok [["Ada", "36"]])
       "read"
-  in
-  assertEq (writeAll [["a", "b,c"], ["d", "e"]] writerBuilder) (Ok "a,\"b,c\"\nd,e\n") "write"
+  in assertEq (writeAll [["a", "b,c"], ["d", "e"]] writerBuilder) (Ok "a,\"b,c\"\nd,e\n") "write"
 
 -- A comment at the very end, with no line feed after it, reads as an empty
 -- record, as the crate reads it.
@@ -338,5 +353,4 @@ fun runNumber i =
         let quoted = writerBuilder |> withQuoteStyle QuoteStyle.Always in
         writeAll (V.map (\(r : StringRecord) -> V.reverse r.fields) rows) quoted
     | Err e -> Err e
-  in
-  assertEq out (Ok "\"709037\",\"Oslo\"\n\"552995\",\"Den Haag\"\n") "reversed and quoted"
+  in assertEq out (Ok "\"709037\",\"Oslo\"\n\"552995\",\"Den Haag\"\n") "reversed and quoted"
